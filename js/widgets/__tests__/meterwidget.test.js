@@ -748,4 +748,88 @@ describe("Meter Widget", () => {
             expect(beatInterval(widget)).toBe((global.TONEBPM / 120) * 1000 * 0.125);
         });
     });
+
+    describe("Playback Indicator Visibility (#9556)", () => {
+        beforeEach(() => {
+            if (meterWidget._playWheel && meterWidget._playWheel.navItems) {
+                meterWidget._playWheel.navItems.forEach(item => {
+                    item.navItem.hide.mockClear();
+                    item.navItem.show.mockClear();
+                });
+            }
+        });
+
+        test("hides all play wheel beat indicators when stopping playback via Play button", () => {
+            jest.useFakeTimers();
+
+            const widgetWindow = window.widgetWindows.windowFor();
+            const playBtn = widgetWindow.addButton.mock.results[0].value;
+
+            playBtn.onclick();
+            expect(meterWidget._playing).toBe(true);
+
+            meterWidget.__playOneBeat(0, 500);
+            expect(meterWidget._playWheel.navItems[0].navItem.show).toHaveBeenCalled();
+
+            meterWidget._playWheel.navItems.forEach(item => item.navItem.hide.mockClear());
+
+            jest.advanceTimersByTime(1100);
+
+            playBtn.onclick();
+            expect(meterWidget._playing).toBe(false);
+
+            meterWidget._playWheel.navItems.forEach(item => {
+                expect(item.navItem.hide).toHaveBeenCalled();
+            });
+
+            jest.useRealTimers();
+        });
+
+        test("hides beat indicators when widget window is closed", () => {
+            const widgetWindow = window.widgetWindows.windowFor();
+            meterWidget._playing = true;
+            meterWidget.__playOneBeat(0, 500);
+
+            meterWidget._playWheel.navItems.forEach(item => item.navItem.hide.mockClear());
+
+            widgetWindow.onclose();
+
+            expect(meterWidget._playing).toBe(false);
+            meterWidget._playWheel.navItems.forEach(item => {
+                expect(item.navItem.hide).toHaveBeenCalled();
+            });
+        });
+
+        test("hides beat indicators when Reset button is clicked", () => {
+            const widgetWindow = window.widgetWindows.windowFor();
+            const resetBtn = widgetWindow.addButton.mock.results.find(
+                res => res.value && res.value.tip === "Reset"
+            ).value;
+
+            meterWidget._playing = true;
+            meterWidget.__playOneBeat(0, 500);
+
+            meterWidget._playWheel.navItems.forEach(item => item.navItem.hide.mockClear());
+
+            resetBtn.onclick();
+
+            expect(meterWidget._playing).toBe(false);
+            meterWidget._playWheel.navItems.forEach(item => {
+                expect(item.navItem.hide).toHaveBeenCalled();
+            });
+        });
+
+        test("safely handles _hidePlaybackIndicator when _playWheel or navItems is undefined or malformed", () => {
+            meterWidget._playWheel = null;
+            expect(() => meterWidget._hidePlaybackIndicator()).not.toThrow();
+
+            meterWidget._playWheel = {};
+            expect(() => meterWidget._hidePlaybackIndicator()).not.toThrow();
+
+            meterWidget._playWheel = {
+                navItems: [null, {}, { navItem: null }, { navItem: {} }]
+            };
+            expect(() => meterWidget._hidePlaybackIndicator()).not.toThrow();
+        });
+    });
 });
